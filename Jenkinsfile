@@ -1,25 +1,24 @@
 pipeline {
   agent any
 
-  // Optionally, you can add environment variables if needed
   environment {
-    // Define a default value for the branch in case env.BRANCH_NAME is not set (e.g., in a manual build)
+    // Set default branch to 'main' if BRANCH_NAME is not defined
     BRANCH = "${env.BRANCH_NAME ?: 'main'}"
   }
 
   stages {
     stage('Checkout') {
       steps {
-        // Checkout the code from the branch that triggered the build
         checkout scm
       }
     }
     
     stage('Build') {
       steps {
-        echo "Building the application..."
-        // For example, if using Node.js: install dependencies and build the app.
+        echo "Building the NodeJS application..."
         sh 'npm install'
+        // Optionally, you may run "npm run build" if your app requires a build step.
+        // If the requirement is just "npm install" for building, remove the following line.
         sh 'npm run build'
       }
     }
@@ -27,7 +26,6 @@ pipeline {
     stage('Test') {
       steps {
         echo "Running tests..."
-        // Run your tests (update command based on your test framework)
         sh 'npm test'
       }
     }
@@ -35,11 +33,30 @@ pipeline {
     stage('Build Docker Image') {
       steps {
         script {
-          // Determine the image tag based on the branch
-          def imageTag = (BRANCH == 'dev') ? 'myapp:dev' : 'myapp:latest'
+          // Use different image names based on branch
+          def imageTag = (BRANCH == 'dev') ? 'nodedev:v1.0' : 'nodemain:v1.0'
           echo "Building Docker image with tag: ${imageTag}"
-          // Build the Docker image (update Dockerfile as needed)
           sh "docker build -t ${imageTag} ."
+        }
+      }
+    }
+    
+    stage('Pre-Deploy Cleanup') {
+      steps {
+        script {
+          // Stop and remove any running containers using the same image
+          def imageTag = (BRANCH == 'dev') ? 'nodedev:v1.0' : 'nodemain:v1.0'
+          echo "Stopping and removing any running containers for image ${imageTag}..."
+          // List container IDs running this image and stop/remove them if they exist
+          sh '''
+            containers=$(docker ps -q --filter "ancestor=''' + imageTag + '''")
+            if [ ! -z "$containers" ]; then
+              docker stop $containers
+              docker rm $containers
+            else
+              echo "No running containers found for image ''' + imageTag + '''"
+            fi
+          '''
         }
       }
     }
@@ -47,19 +64,19 @@ pipeline {
     stage('Deploy') {
       steps {
         script {
-          // Set the deployment port based on the branch:
-          // For 'dev' branch use port 3001, for 'main' branch use port 3000.
-          def deployPort = (BRANCH == 'dev') ? 3001 : 3000
-          echo "Deploying the application on port: ${deployPort}"
-          // Deploy the application using the Docker image built earlier.
-          // For example, run a Docker container mapping deployPort to container port (assumed here as 8080):
-          sh "docker run -d -p ${deployPort}:8080 ${BRANCH == 'dev' ? 'myapp:dev' : 'myapp:latest'}"
+          if (BRANCH == 'dev') {
+            echo "Deploying dev branch on port 3001..."
+            // For dev branch, expose port 3001 externally, mapping it to container port 3000
+            sh "docker run -d --expose 3001 -p 3001:3000 nodedev:v1.0"
+          } else {
+            echo "Deploying main branch on port 3000..."
+            sh "docker run -d --expose 3000 -p 3000:3000 nodemain:v1.0"
+          }
         }
       }
     }
   }
 
-  // Optionally add post actions (e.g., notifications or clean up)
   post {
     always {
       echo "Pipeline execution completed."
