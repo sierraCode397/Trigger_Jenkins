@@ -41,25 +41,27 @@ pipeline {
       }
     }
     
-    stage('Pre-Deploy Cleanup') {
-      steps {
-        script {
-          // Stop and remove any running containers using the same image
-          def imageTag = (BRANCH == 'dev') ? 'nodedev:v1.0' : 'nodemain:v1.0'
-          echo "Stopping and removing any running containers for image ${imageTag}..."
-          // List container IDs running this image and stop/remove them if they exist
-          sh '''
-            containers=$(docker ps -q --filter "ancestor=''' + imageTag + '''")
-            if [ ! -z "$containers" ]; then
-              docker stop $containers
-              docker rm $containers
-            else
-              echo "No running containers found for image ''' + imageTag + '''"
-            fi
-          '''
-        }
-      }
+stage('Pre-Deploy Cleanup') {
+  steps {
+    script {
+      def deployPort = (BRANCH == 'dev') ? 3001 : 3000
+      echo "Stopping and removing any running containers on port ${deployPort}..."
+      
+      // Find and stop containers using the required port
+      sh """
+        containers=\$(docker ps -q --filter "publish=${deployPort}")
+        if [ ! -z "\$containers" ]; then
+          docker stop \$containers
+          docker rm \$containers
+        else
+          echo "No running containers found on port ${deployPort}"
+        fi
+      """
     }
+  }
+}
+
+
     
     stage('Deploy') {
       steps {
