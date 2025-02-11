@@ -48,11 +48,17 @@ pipeline {
       }
     }
 
-    stage('Build') {
+    // Use a Docker agent for the Build stage
+    stage('Build inside Docker container') {
+      agent {
+        docker { image 'node:7.8.0' }
+      }
       steps {
-        echo "Building the NodeJS application..."
-        sh 'npm install'
-        sh 'npm run build'
+        script {
+          echo "Building the NodeJS application inside Docker container..."
+          sh 'npm install'
+          sh 'npm run build'
+        }
       }
     }
 
