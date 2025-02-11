@@ -48,7 +48,7 @@ pipeline {
     stage('Push Docker Image to Docker Hub') {
       steps {
         script {
-          // Wrap Docker login and image pushing inside `withCredentials` block
+          // All Docker-related variables and actions inside `withCredentials` block
           withCredentials([usernamePassword(credentialsId: 'docker-hub-credentials', usernameVariable: 'DOCKER_USER', passwordVariable: 'DOCKER_PASS')]) {
             echo "Logging in to Docker Hub as ${DOCKER_USER}..."
             sh "echo \$DOCKER_PASS | docker login -u \$DOCKER_USER --password-stdin"
