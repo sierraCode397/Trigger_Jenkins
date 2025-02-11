@@ -1,3 +1,5 @@
+@Library('JenkinsTesLib') _  // Import the shared library
+
 pipeline {
   agent any
 
@@ -16,6 +18,15 @@ pipeline {
           env.DEPLOY_PORT = (env.BRANCH_NAME == 'dev') ? '3001' : '3000'
           env.IMAGE_NAME  = (env.BRANCH_NAME == 'dev') ? 'nodedev' : 'nodemain'
           echo "Branch: ${env.BRANCH_NAME} -> Will deploy image ${env.IMAGE_NAME}:v1.0 on port ${env.DEPLOY_PORT}"
+        }
+      }
+    }
+    
+    // New stage to verify that the shared library is loaded
+    stage('Initialize Shared Library') {
+      steps {
+        script {
+          sharedLib.announce()
         }
       }
     }
@@ -54,26 +65,10 @@ pipeline {
     stage('Push Docker Image to Docker Hub') {
       steps {
         script {
-          echo "Logging in to Docker Hub as ${DOCKER_USER}..."
-          // Login non-interactively using the hardcoded credentials.
-          sh '''
-            echo "$DOCKER_PASS" | docker login -u "$DOCKER_USER" --password-stdin
-          '''
-
-          // Define the full image tags for v1.0 and latest.
+          // Construct the full image tag using the hardcoded DOCKER_USER.
           def fullImageTag = "${DOCKER_USER}/${env.IMAGE_NAME}:v1.0"
-          def latestTag   = "${DOCKER_USER}/${env.IMAGE_NAME}:latest"
-
-          echo "Tagging local image ${env.IMAGE_NAME}:v1.0 as ${fullImageTag} and ${latestTag}"
-          
-          // Tag and push the image.
-          sh "docker tag ${env.IMAGE_NAME}:v1.0 ${fullImageTag}"
-          sh "docker push ${fullImageTag}"
-
-          sh "docker tag ${env.IMAGE_NAME}:v1.0 ${latestTag}"
-          sh "docker push ${latestTag}"
-
-          sh "docker logout"
+          // Use the shared library function for logging in, tagging, and pushing.
+          dockerUtils.buildAndPushImage(fullImageTag, DOCKER_USER, DOCKER_PASS, env.IMAGE_NAME)
         }
       }
     }
@@ -81,16 +76,8 @@ pipeline {
     stage('Stop Existing Container for Selected Environment') {
       steps {
         script {
-          echo "Stopping and removing any running containers on port ${env.DEPLOY_PORT}..."
-          sh """
-            containers=\$(docker ps -q --filter "publish=${env.DEPLOY_PORT}")
-            if [ ! -z "\$containers" ]; then
-              docker stop \$containers
-              docker rm \$containers
-            else
-              echo "No running containers found for port ${env.DEPLOY_PORT}"
-            fi
-          """
+          // Use the shared library function to stop and remove containers
+          dockerUtils.stopAndRemoveContainers(env.DEPLOY_PORT)
         }
       }
     }
