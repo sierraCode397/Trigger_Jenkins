@@ -19,7 +19,7 @@ pipeline {
         checkout scm
       }
     }
-    
+
     stage('Build') {
       steps {
         echo "Building the NodeJS application..."
@@ -27,14 +27,14 @@ pipeline {
         sh 'npm run build'
       }
     }
-    
+
     stage('Test') {
       steps {
         echo "Running tests..."
         sh 'npm test'
       }
     }
-    
+
     stage('Build Docker Image') {
       steps {
         script {
@@ -44,28 +44,29 @@ pipeline {
         }
       }
     }
-    
+
     stage('Push Docker Image to Docker Hub') {
       steps {
         script {
-          // All Docker-related variables and actions inside `withCredentials` block
-          withCredentials([usernamePassword(credentialsId: 'docker-hub-credentials', usernameVariable: 'DOCKER_USER', passwordVariable: 'DOCKER_PASS')]) {
-            echo "Logging in to Docker Hub as ${DOCKER_USER}..."
-            sh "echo \$DOCKER_PASS | docker login -u \$DOCKER_USER --password-stdin"
+          // Hardcoded Docker credentials (for testing purposes)
+          def DOCKER_USER = 'isaacluisjuan107'  // Your Docker Hub username
+          def DOCKER_PASS = 'Maverick$@1'     // Your Docker Hub password
 
-            // Define the full image name inside the block to ensure DOCKER_USER is accessible
-            def imageTag = "${DOCKER_USER}/${env.IMAGE_NAME}:v1.0"
-            def latestTag = "${DOCKER_USER}/${env.IMAGE_NAME}:latest"
+          echo "Logging in to Docker Hub as ${DOCKER_USER}..."
+          sh "echo \$DOCKER_PASS | docker login -u \$DOCKER_USER --password-stdin"
 
-            echo "Tagging and pushing ${imageTag} and ${latestTag} to Docker Hub..."
-            sh "docker tag ${env.IMAGE_NAME}:v1.0 ${imageTag}"
-            sh "docker push ${imageTag}"
+          // Define the full image name inside the block to ensure DOCKER_USER is accessible
+          def imageTag = "${DOCKER_USER}/${env.IMAGE_NAME}:v1.0"
+          def latestTag = "${DOCKER_USER}/${env.IMAGE_NAME}:latest"
 
-            sh "docker tag ${env.IMAGE_NAME}:v1.0 ${latestTag}"
-            sh "docker push ${latestTag}"
+          echo "Tagging and pushing ${imageTag} and ${latestTag} to Docker Hub..."
+          sh "docker tag ${env.IMAGE_NAME}:v1.0 ${imageTag}"
+          sh "docker push ${imageTag}"
 
-            sh "docker logout"
-          }
+          sh "docker tag ${env.IMAGE_NAME}:v1.0 ${latestTag}"
+          sh "docker push ${latestTag}"
+
+          sh "docker logout"
         }
       }
     }
@@ -86,7 +87,7 @@ pipeline {
         }
       }
     }
-    
+
     stage('Deploy Local Container') {
       steps {
         script {
@@ -98,7 +99,7 @@ pipeline {
         }
       }
     }
-    
+
     stage('Trigger Deployment Pipeline') {
       steps {
         script {
