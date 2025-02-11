@@ -53,12 +53,13 @@ pipeline {
       agent {
         docker {
           image 'node:7.8.0'
+          args '--user root'
         }
       }
       steps {
         script {
           echo "Building the NodeJS application inside Docker container..."
-          sh 'npm install --unsafe-perm'
+          sh 'npm install'
           sh 'npm run build'
         }
       }
