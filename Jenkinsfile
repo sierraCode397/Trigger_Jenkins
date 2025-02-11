@@ -47,25 +47,29 @@ pipeline {
     }
     
     stage('Push Docker Image to Docker Hub') {
-      steps {
-        script {
-          // Use Docker credentials to log in and push the image.
-          // We need to retrieve the DOCKER_USER from credentials.
-          withCredentials([usernamePassword(credentialsId: 'docker-hub-credentials', usernameVariable: 'DOCKER_USER', passwordVariable: 'DOCKER_PASS')]) {
-            echo "Logging in to Docker Hub as ${DOCKER_USER}..."
-            sh "echo \$DOCKER_PASS | docker login -u \$DOCKER_USER --password-stdin"
-            def imageTag = "${env.IMAGE_NAME}:v1.0"
-            def fullImage = "${DOCKER_USER}/${imageTag}"
-            echo "Pushing image ${fullImage} to Docker Hub..."
-            sh "docker tag ${imageTag} ${fullImage}"
-            sh "docker push ${fullImage}"
-            sh "docker logout"
-            // Save the full image name for later use (for triggering downstream jobs)
-            env.FULL_IMAGE = fullImage
-          }
-        }
-      }
-    }
+     steps {
+       script {
+         withCredentials([usernamePassword(credentialsId: 'docker-hub-credentials', usernameVariable: 'DOCKER_USER', passwordVariable: 'DOCKER_PASS')]) {
+           echo "Logging in to Docker Hub as ${DOCKER_USER}..."
+           sh "echo \$DOCKER_PASS | docker login -u \$DOCKER_USER --password-stdin"
+
+           // Define the full image name inside the block to ensure DOCKER_USER is accessible
+           def imageTag = "${DOCKER_USER}/${env.IMAGE_NAME}:v1.0"
+           def latestTag = "${DOCKER_USER}/${env.IMAGE_NAME}:latest"
+
+           echo "Tagging and pushing ${imageTag} and ${latestTag} to Docker Hub..."
+           sh "docker tag ${env.IMAGE_NAME}:v1.0 ${imageTag}"
+           sh "docker push ${imageTag}"
+
+           sh "docker tag ${env.IMAGE_NAME}:v1.0 ${latestTag}"
+           sh "docker push ${latestTag}"
+
+           sh "docker logout"
+         }
+       }
+     }
+   }
+
     
     stage('Stop Existing Container for Selected Environment') {
       steps {
