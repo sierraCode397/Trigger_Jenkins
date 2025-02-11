@@ -53,13 +53,12 @@ pipeline {
       agent {
         docker {
           image 'node:7.8.0'
-          args '-v $HOME/.npm:/root/.npm'  // Mounts a writable npm cache
         }
       }
       steps {
         script {
           echo "Building the NodeJS application inside Docker container..."
-          sh 'npm install'
+          sh 'npm install --unsafe-perm'
           sh 'npm run build'
         }
       }
