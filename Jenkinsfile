@@ -53,7 +53,9 @@ pipeline {
           def DOCKER_PASS = 'Maverick$@1'     // Your Docker Hub password
 
           echo "Logging in to Docker Hub as ${DOCKER_USER}..."
-          sh "echo \$DOCKER_PASS | docker login -u \$DOCKER_USER --password-stdin"
+          sh """
+            echo \$DOCKER_PASS | docker login -u \$DOCKER_USER --password-stdin
+          """
 
           // Define the full image name inside the block to ensure DOCKER_USER is accessible
           def imageTag = "${DOCKER_USER}/${env.IMAGE_NAME}:v1.0"
