@@ -51,7 +51,10 @@ pipeline {
     // Use a Docker agent for the Build stage
     stage('Build inside Docker container') {
       agent {
-        docker { image 'node:7.8.0' }
+        docker {
+          image 'node:7.8.0'
+          args '-v $HOME/.npm:/root/.npm'  // Mounts a writable npm cache
+        }
       }
       steps {
         script {
