@@ -1,0 +1,53 @@
+pipeline {
+  agent any
+
+  parameters {
+    choice(name: 'TARGET_ENV', choices: ['main', 'dev'], description: 'Select deployment environment')
+    string(name: 'IMAGE_TAG', defaultValue: 'v1.0', description: 'Enter Docker image tag (e.g., v1.0)')
+  }
+
+  stages {
+    stage('Set Deployment Variables') {
+      steps {
+        script {
+          env.DEPLOY_PORT = (params.TARGET_ENV == 'dev') ? '3001' : '3000'
+          env.IMAGE_NAME = (params.TARGET_ENV == 'dev') ? 'nodedev' : 'nodemain'
+          echo "Deploying to ${params.TARGET_ENV} on port ${env.DEPLOY_PORT} using image ${env.IMAGE_NAME}:${params.IMAGE_TAG}"
+        }
+      }
+    }
+
+    stage('Stop Existing Container') {
+      steps {
+        script {
+          echo "Stopping and removing any running containers on port ${env.DEPLOY_PORT}..."
+          
+          sh """
+            containers=\$(docker ps -q --filter "publish=${env.DEPLOY_PORT}")
+            if [ ! -z "\$containers" ]; then
+              docker stop \$containers
+              docker rm \$containers
+            else
+              echo "No running containers found on port ${env.DEPLOY_PORT}"
+            fi
+          """
+        }
+      }
+    }
+
+    stage('Deploy Selected Image') {
+      steps {
+        script {
+          echo "Running container: ${env.IMAGE_NAME}:${params.IMAGE_TAG} on port ${env.DEPLOY_PORT}..."
+          sh "docker run -d --expose ${env.DEPLOY_PORT} -p ${env.DEPLOY_PORT}:3000 ${env.IMAGE_NAME}:${params.IMAGE_TAG}"
+        }
+      }
+    }
+  }
+
+  post {
+    always {
+      echo "Deployment Completed."
+    }
+  }
+}
