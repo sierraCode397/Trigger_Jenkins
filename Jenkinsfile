@@ -31,6 +31,19 @@ pipeline {
       }
     }
 
+    stage('Lint Dockerfile with Hadolint') {
+      when {
+        changeset "**/Dockerfile"
+      }
+      steps {
+        script {
+          echo "Running Hadolint to check Dockerfile..."
+          sh 'hadolint Dockerfile'
+        }
+      }
+    }
+
+
     stage('Checkout') {
       steps {
         checkout scm
