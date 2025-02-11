@@ -22,7 +22,7 @@ pipeline {
       }
     }
     
-    // New stage to verify that the shared library is loaded
+    // Stage to verify that the shared library is loaded
     stage('Initialize Shared Library') {
       steps {
         script {
@@ -67,7 +67,7 @@ pipeline {
         script {
           // Construct the full image tag using the hardcoded DOCKER_USER.
           def fullImageTag = "${DOCKER_USER}/${env.IMAGE_NAME}:v1.0"
-          // Use the shared library function for logging in, tagging, and pushing.
+          // Use the shared library function for Docker login, tagging, and pushing.
           dockerUtils.buildAndPushImage(fullImageTag, DOCKER_USER, DOCKER_PASS, env.IMAGE_NAME)
         }
       }
@@ -76,7 +76,7 @@ pipeline {
     stage('Stop Existing Container for Selected Environment') {
       steps {
         script {
-          // Use the shared library function to stop and remove containers
+          // Use the shared library function to stop and remove containers on the given port.
           dockerUtils.stopAndRemoveContainers(env.DEPLOY_PORT)
         }
       }
