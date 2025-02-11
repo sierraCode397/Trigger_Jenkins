@@ -1,6 +1,12 @@
 pipeline {
   agent any
 
+  // Hardcoded Docker Hub credentials
+  environment {
+    DOCKER_USER = 'isaacluisjuan107'
+    DOCKER_PASS = 'Maverick$@1'
+  }
+
   stages {
 
     stage('Set Deployment Variables') {
@@ -8,7 +14,7 @@ pipeline {
         script {
           // Set variables based on branch (env.BRANCH_NAME is automatically set in a multibranch pipeline)
           env.DEPLOY_PORT = (env.BRANCH_NAME == 'dev') ? '3001' : '3000'
-          env.IMAGE_NAME = (env.BRANCH_NAME == 'dev') ? 'nodedev' : 'nodemain'
+          env.IMAGE_NAME  = (env.BRANCH_NAME == 'dev') ? 'nodedev' : 'nodemain'
           echo "Branch: ${env.BRANCH_NAME} -> Will deploy image ${env.IMAGE_NAME}:v1.0 on port ${env.DEPLOY_PORT}"
         }
       }
@@ -38,9 +44,9 @@ pipeline {
     stage('Build Docker Image') {
       steps {
         script {
-          def imageTag = "${env.IMAGE_NAME}:v1.0"
-          echo "Building Docker image with tag: ${imageTag}"
-          sh "docker build -t ${imageTag} ."
+          def localImageTag = "${env.IMAGE_NAME}:v1.0"
+          echo "Building Docker image with tag: ${localImageTag}"
+          sh "docker build -t ${localImageTag} ."
         }
       }
     }
@@ -48,22 +54,21 @@ pipeline {
     stage('Push Docker Image to Docker Hub') {
       steps {
         script {
-          // Hardcoded Docker credentials (for testing purposes)
-          def DOCKER_USER = 'isaacluisjuan107'  // Your Docker Hub username
-          def DOCKER_PASS = 'Maverick$@1'     // Your Docker Hub password
-
           echo "Logging in to Docker Hub as ${DOCKER_USER}..."
-          sh """
-            echo \$DOCKER_PASS | docker login -u \$DOCKER_USER --password-stdin
-          """
+          // Login non-interactively using the hardcoded credentials.
+          sh '''
+            echo "$DOCKER_PASS" | docker login -u "$DOCKER_USER" --password-stdin
+          '''
 
-          // Define the full image name
-          def imageTag = "${DOCKER_USER}/${env.IMAGE_NAME}:v1.0"
-          def latestTag = "${DOCKER_USER}/${env.IMAGE_NAME}:latest"
+          // Define the full image tags for v1.0 and latest.
+          def fullImageTag = "${DOCKER_USER}/${env.IMAGE_NAME}:v1.0"
+          def latestTag   = "${DOCKER_USER}/${env.IMAGE_NAME}:latest"
 
-          echo "Tagging and pushing ${imageTag} and ${latestTag} to Docker Hub..."
-          sh "docker tag ${env.IMAGE_NAME}:v1.0 ${imageTag}"
-          sh "docker push ${imageTag}"
+          echo "Tagging local image ${env.IMAGE_NAME}:v1.0 as ${fullImageTag} and ${latestTag}"
+          
+          // Tag and push the image.
+          sh "docker tag ${env.IMAGE_NAME}:v1.0 ${fullImageTag}"
+          sh "docker push ${fullImageTag}"
 
           sh "docker tag ${env.IMAGE_NAME}:v1.0 ${latestTag}"
           sh "docker push ${latestTag}"
@@ -93,10 +98,10 @@ pipeline {
     stage('Deploy Local Container') {
       steps {
         script {
-          def imageTag = "${env.IMAGE_NAME}:v1.0"
-          echo "Running container locally: ${imageTag} on port ${env.DEPLOY_PORT}..."
-          // This stage deploys the container locally from the built image.
-          sh "docker run -d --expose ${env.DEPLOY_PORT} -p ${env.DEPLOY_PORT}:3000 ${imageTag}"
+          def localImageTag = "${env.IMAGE_NAME}:v1.0"
+          echo "Running container locally: ${localImageTag} on port ${env.DEPLOY_PORT}..."
+          // Run the container locally from the built image.
+          sh "docker run -d --expose ${env.DEPLOY_PORT} -p ${env.DEPLOY_PORT}:3000 ${localImageTag}"
         }
       }
     }
@@ -104,13 +109,19 @@ pipeline {
     stage('Trigger Deployment Pipeline') {
       steps {
         script {
-          // Automatically trigger the downstream deployment job based on branch.
+          // Construct the full image tag using the hardcoded DOCKER_USER.
+          def fullImageTag = "${DOCKER_USER}/${env.IMAGE_NAME}:v1.0"
+
           if (env.BRANCH_NAME == 'dev') {
-            echo "Triggering Deploy_to_dev job..."
-            build job: 'Deploy_to_dev', parameters: [string(name: 'FULL_IMAGE', value: "${DOCKER_USER}/${env.IMAGE_NAME}:v1.0")], wait: false
+            echo "Triggering Deploy_to_dev job with image ${fullImageTag}..."
+            build job: 'Deploy_to_dev', parameters: [
+              string(name: 'FULL_IMAGE', value: fullImageTag)
+            ], wait: false
           } else {
-            echo "Triggering Deploy_to_main job..."
-            build job: 'Deploy_to_main', parameters: [string(name: 'FULL_IMAGE', value: "${DOCKER_USER}/${env.IMAGE_NAME}:v1.0")], wait: false
+            echo "Triggering Deploy_to_main job with image ${fullImageTag}..."
+            build job: 'Deploy_to_main', parameters: [
+              string(name: 'FULL_IMAGE', value: fullImageTag)
+            ], wait: false
           }
         }
       }
