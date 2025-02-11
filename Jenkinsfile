@@ -57,7 +57,7 @@ pipeline {
             echo \$DOCKER_PASS | docker login -u \$DOCKER_USER --password-stdin
           """
 
-          // Define the full image name inside the block to ensure DOCKER_USER is accessible
+          // Define the full image name
           def imageTag = "${DOCKER_USER}/${env.IMAGE_NAME}:v1.0"
           def latestTag = "${DOCKER_USER}/${env.IMAGE_NAME}:latest"
 
@@ -96,7 +96,6 @@ pipeline {
           def imageTag = "${env.IMAGE_NAME}:v1.0"
           echo "Running container locally: ${imageTag} on port ${env.DEPLOY_PORT}..."
           // This stage deploys the container locally from the built image.
-          // (This may be optional if your goal is to rely on the deployment pipelines below.)
           sh "docker run -d --expose ${env.DEPLOY_PORT} -p ${env.DEPLOY_PORT}:3000 ${imageTag}"
         }
       }
