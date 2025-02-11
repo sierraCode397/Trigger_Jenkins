@@ -9,7 +9,6 @@ pipeline {
           // Set variables based on branch (env.BRANCH_NAME is automatically set in a multibranch pipeline)
           env.DEPLOY_PORT = (env.BRANCH_NAME == 'dev') ? '3001' : '3000'
           env.IMAGE_NAME = (env.BRANCH_NAME == 'dev') ? 'nodedev' : 'nodemain'
-          env.FULL_IMAGE = "${DOCKER_USER}/${env.IMAGE_NAME}:v1.0"  // We'll set DOCKER_USER below via credentials.
           echo "Branch: ${env.BRANCH_NAME} -> Will deploy image ${env.IMAGE_NAME}:v1.0 on port ${env.DEPLOY_PORT}"
         }
       }
@@ -47,30 +46,29 @@ pipeline {
     }
     
     stage('Push Docker Image to Docker Hub') {
-     steps {
-       script {
-         withCredentials([usernamePassword(credentialsId: 'docker-hub-credentials', usernameVariable: 'DOCKER_USER', passwordVariable: 'DOCKER_PASS')]) {
-           echo "Logging in to Docker Hub as ${DOCKER_USER}..."
-           sh "echo \$DOCKER_PASS | docker login -u \$DOCKER_USER --password-stdin"
+      steps {
+        script {
+          withCredentials([usernamePassword(credentialsId: 'docker-hub-credentials', usernameVariable: 'DOCKER_USER', passwordVariable: 'DOCKER_PASS')]) {
+            echo "Logging in to Docker Hub as ${DOCKER_USER}..."
+            sh "echo \$DOCKER_PASS | docker login -u \$DOCKER_USER --password-stdin"
 
-           // Define the full image name inside the block to ensure DOCKER_USER is accessible
-           def imageTag = "${DOCKER_USER}/${env.IMAGE_NAME}:v1.0"
-           def latestTag = "${DOCKER_USER}/${env.IMAGE_NAME}:latest"
+            // Define the full image name inside the block to ensure DOCKER_USER is accessible
+            def imageTag = "${DOCKER_USER}/${env.IMAGE_NAME}:v1.0"
+            def latestTag = "${DOCKER_USER}/${env.IMAGE_NAME}:latest"
 
-           echo "Tagging and pushing ${imageTag} and ${latestTag} to Docker Hub..."
-           sh "docker tag ${env.IMAGE_NAME}:v1.0 ${imageTag}"
-           sh "docker push ${imageTag}"
+            echo "Tagging and pushing ${imageTag} and ${latestTag} to Docker Hub..."
+            sh "docker tag ${env.IMAGE_NAME}:v1.0 ${imageTag}"
+            sh "docker push ${imageTag}"
 
-           sh "docker tag ${env.IMAGE_NAME}:v1.0 ${latestTag}"
-           sh "docker push ${latestTag}"
+            sh "docker tag ${env.IMAGE_NAME}:v1.0 ${latestTag}"
+            sh "docker push ${latestTag}"
 
-           sh "docker logout"
-         }
-       }
-     }
-   }
+            sh "docker logout"
+          }
+        }
+      }
+    }
 
-    
     stage('Stop Existing Container for Selected Environment') {
       steps {
         script {
@@ -106,10 +104,10 @@ pipeline {
           // Automatically trigger the downstream deployment job based on branch.
           if (env.BRANCH_NAME == 'dev') {
             echo "Triggering Deploy_to_dev job..."
-            build job: 'Deploy_to_dev', parameters: [string(name: 'FULL_IMAGE', value: env.FULL_IMAGE)], wait: false
+            build job: 'Deploy_to_dev', parameters: [string(name: 'FULL_IMAGE', value: "${DOCKER_USER}/${env.IMAGE_NAME}:v1.0")], wait: false
           } else {
             echo "Triggering Deploy_to_main job..."
-            build job: 'Deploy_to_main', parameters: [string(name: 'FULL_IMAGE', value: env.FULL_IMAGE)], wait: false
+            build job: 'Deploy_to_main', parameters: [string(name: 'FULL_IMAGE', value: "${DOCKER_USER}/${env.IMAGE_NAME}:v1.0")], wait: false
           }
         }
       }
