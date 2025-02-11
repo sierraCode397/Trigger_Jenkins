@@ -62,6 +62,18 @@ pipeline {
       }
     }
 
+    stage('Vulnerability Scan with Trivy') {
+      steps {
+        script {
+          def imageTag = "${DOCKER_USER}/${env.IMAGE_NAME}:v1.0"
+          echo "Scanning the Docker image ${imageTag} for vulnerabilities..."
+          sh """
+            trivy image --exit-code 1 --severity HIGH,CRITICAL --no-progress ${imageTag} || echo "Vulnerability scan failed. Proceeding with the pipeline."
+          """
+        }
+      }
+    }
+
     stage('Push Docker Image to Docker Hub') {
       steps {
         script {
