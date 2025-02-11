@@ -65,13 +65,13 @@ pipeline {
     stage('Push Docker Image to Docker Hub') {
       steps {
         script {
-          // Construct the full image tag using the hardcoded DOCKER_USER.
           def fullImageTag = "${DOCKER_USER}/${env.IMAGE_NAME}:v1.0"
-          // Use the shared library function for Docker login, tagging, and pushing.
-          dockerUtils.buildAndPushImage(fullImageTag, DOCKER_USER, DOCKER_PASS, env.IMAGE_NAME)
+          // Now call with two parameters only
+          dockerUtils.buildAndPushImage(fullImageTag, env.IMAGE_NAME)
         }
       }
     }
+
 
     stage('Stop Existing Container for Selected Environment') {
       steps {
