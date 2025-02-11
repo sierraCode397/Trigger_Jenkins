@@ -31,10 +31,8 @@ pipeline {
       }
     }
 
+    // Add Dockerfile linting check here
     stage('Lint Dockerfile with Hadolint') {
-      when {
-        changeset "**/Dockerfile"
-      }
       steps {
         script {
           echo "Running Hadolint to check Dockerfile..."
