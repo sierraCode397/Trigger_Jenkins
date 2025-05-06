@@ -1,0 +1,9 @@
+# Ignore build output and dependencies
+build/
+node_modules/
+
+# Optionally ignore the package lock file
+package-lock.json
+
+# Ignore package.json and logo.svg (be cautious with these,
+# since package.json is usually an essential file)

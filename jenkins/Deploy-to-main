@@ -1,0 +1,43 @@
+pipeline {
+  agent any
+
+  parameters {
+    string(name: 'FULL_IMAGE', defaultValue: '', description: 'Full image name from Docker Hub (e.g., yourusername/nodemain:v1.0)')
+  }
+
+  stages {
+    stage('Deploy to Main Environment') {
+      steps {
+        script {
+          withCredentials([usernamePassword(credentialsId: 'docker-hub-credentials', usernameVariable: 'DOCKER_USER', passwordVariable: 'DOCKER_PASS')]) {
+            echo "Logging in to Docker Hub as ${DOCKER_USER}..."
+            sh "echo \$DOCKER_PASS | docker login -u \$DOCKER_USER --password-stdin"
+            echo "Pulling image ${params.FULL_IMAGE}..."
+            sh "docker pull ${params.FULL_IMAGE}"
+            sh "docker logout"
+          }
+          
+          echo "Stopping any running container on port 3000..."
+          sh """
+            containers=\$(docker ps -q --filter "publish=3000")
+            if [ ! -z "\$containers" ]; then
+              docker stop \$containers
+              docker rm \$containers
+            else
+              echo "No running containers found on port 3000"
+            fi
+          """
+          
+          echo "Running container ${params.FULL_IMAGE} on port 3000..."
+          sh "docker run -d --expose 3000 -p 3000:3000 ${params.FULL_IMAGE}"
+        }
+      }
+    }
+  }
+  
+  post {
+    always {
+      echo "Deploy_to_main pipeline completed."
+    }
+  }
+}

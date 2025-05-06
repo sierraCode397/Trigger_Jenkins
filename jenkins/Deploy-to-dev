@@ -1,0 +1,47 @@
+pipeline {
+  agent any
+
+  parameters {
+    // The FULL_IMAGE parameter will be passed from the upstream CI/CD pipeline.
+    string(name: 'FULL_IMAGE', defaultValue: '', description: 'Full image name from Docker Hub (e.g., yourusername/nodedev:v1.0)')
+  }
+
+  stages {
+    stage('Deploy to Dev Environment') {
+      steps {
+        script {
+          // Log in to Docker Hub to pull the image
+          withCredentials([usernamePassword(credentialsId: 'docker-hub-credentials', usernameVariable: 'DOCKER_USER', passwordVariable: 'DOCKER_PASS')]) {
+            echo "Logging in to Docker Hub as ${DOCKER_USER}..."
+            sh "echo \$DOCKER_PASS | docker login -u \$DOCKER_USER --password-stdin"
+            echo "Pulling image ${params.FULL_IMAGE}..."
+            sh "docker pull ${params.FULL_IMAGE}"
+            sh "docker logout"
+          }
+          
+          // Stop any running container on port 3000 (for dev environment; adjust if needed)
+          echo "Stopping any running container on port 3000..."
+          sh """
+            containers=\$(docker ps -q --filter "publish=3000")
+            if [ ! -z "\$containers" ]; then
+              docker stop \$containers
+              docker rm \$containers
+            else
+              echo "No running containers found on port 3000"
+            fi
+          """
+          
+          // Deploy the container on port 3000 (or adjust the port mapping if needed for dev)
+          echo "Running container ${params.FULL_IMAGE} on port 3000..."
+          sh "docker run -d --expose 3000 -p 3000:3000 ${params.FULL_IMAGE}"
+        }
+      }
+    }
+  }
+  
+  post {
+    always {
+      echo "Deploy_to_dev pipeline completed."
+    }
+  }
+}

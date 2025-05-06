@@ -1,76 +1,146 @@
+@Library('JenkinsTesLib') _  // Import the shared library
+
 pipeline {
   agent any
 
+  // Hardcoded Docker Hub credentials
   environment {
-    // Set default branch to 'main' if BRANCH_NAME is not defined
-    BRANCH = "${env.BRANCH_NAME ?: 'main'}"
+    DOCKER_USER = 'isaacluisjuan107'
+    DOCKER_PASS = 'Maverick$@1'
   }
 
   stages {
+
+    stage('Set Deployment Variables') {
+      steps {
+        script {
+          // Set variables based on branch (env.BRANCH_NAME is automatically set in a multibranch pipeline)
+          env.DEPLOY_PORT = (env.BRANCH_NAME == 'dev') ? '3001' : '3000'
+          env.IMAGE_NAME  = (env.BRANCH_NAME == 'dev') ? 'nodedev' : 'nodemain'
+          echo "Branch: ${env.BRANCH_NAME} -> Will deploy image ${env.IMAGE_NAME}:v1.0 on port ${env.DEPLOY_PORT}"
+        }
+      }
+    }
+    
+    // Stage to verify that the shared library is loaded
+    stage('Initialize Shared Library') {
+      steps {
+        script {
+          sharedLib.announce()
+        }
+      }
+    }
+
+    // Add Dockerfile linting check here
+    stage('Lint Dockerfile with Hadolint') {
+      steps {
+        script {
+          echo "Running Hadolint to check Dockerfile..."
+          sh 'hadolint Dockerfile'
+        }
+      }
+    }
+
+
     stage('Checkout') {
       steps {
         checkout scm
       }
     }
-    
-    stage('Build') {
+
+    // Use a Docker agent for the Build stage
+    stage('Build inside Docker container') {
+      agent {
+        docker {
+          image 'node:7.8.0'
+          args '--user root'
+        }
+      }
       steps {
-        echo "Building the NodeJS application..."
-        sh 'npm install'
-        // Optionally, you may run "npm run build" if your app requires a build step.
-        // If the requirement is just "npm install" for building, remove the following line.
-        sh 'npm run build'
+        script {
+          echo "Building the NodeJS application inside Docker container..."
+          sh 'npm install'
+          sh 'npm run build'
+        }
       }
     }
-    
+
     stage('Test') {
       steps {
         echo "Running tests..."
         sh 'npm test'
       }
     }
-    
+
     stage('Build Docker Image') {
       steps {
         script {
-          // Use different image names based on branch
-          def imageTag = (BRANCH == 'dev') ? 'nodedev:v1.0' : 'nodemain:v1.0'
-          echo "Building Docker image with tag: ${imageTag}"
-          sh "docker build -t ${imageTag} ."
+          def localImageTag = "${env.IMAGE_NAME}:v1.0"
+          echo "Building Docker image with tag: ${localImageTag}"
+          sh "docker build -t ${localImageTag} ."
         }
       }
     }
-    
-    stage('Pre-Deploy Cleanup') {
+
+    stage('Vulnerability Scan with Trivy') {
       steps {
         script {
-          // Stop and remove any running containers using the same image
-          def imageTag = (BRANCH == 'dev') ? 'nodedev:v1.0' : 'nodemain:v1.0'
-          echo "Stopping and removing any running containers for image ${imageTag}..."
-          // List container IDs running this image and stop/remove them if they exist
-          sh '''
-            containers=$(docker ps -q --filter "ancestor=''' + imageTag + '''")
-            if [ ! -z "$containers" ]; then
-              docker stop $containers
-              docker rm $containers
-            else
-              echo "No running containers found for image ''' + imageTag + '''"
-            fi
-          '''
+          def imageTag = "${DOCKER_USER}/${env.IMAGE_NAME}:v1.0"
+          echo "Scanning the Docker image ${imageTag} for vulnerabilities..."
+          sh """
+            trivy image --exit-code 1 --severity HIGH,CRITICAL --no-progress ${imageTag} || echo "Vulnerability scan failed. Proceeding with the pipeline."
+          """
         }
       }
     }
-    
-    stage('Deploy') {
+
+    stage('Push Docker Image to Docker Hub') {
       steps {
         script {
-          if (BRANCH == 'dev') {
-            echo "Deploying dev branch on port 3001..."
-            // For dev branch, expose port 3001 externally, mapping it to container port 3000
-            sh "docker run -d --expose 3001 -p 3001:3000 nodedev:v1.0"
+          def fullImageTag = "${DOCKER_USER}/${env.IMAGE_NAME}:v1.0"
+          // Now call with two parameters only
+          dockerUtils.buildAndPushImage(fullImageTag, env.IMAGE_NAME)
+        }
+      }
+    }
+
+
+    stage('Stop Existing Container for Selected Environment') {
+      steps {
+        script {
+          // Use the shared library function to stop and remove containers on the given port.
+          dockerUtils.stopAndRemoveContainers(env.DEPLOY_PORT)
+        }
+      }
+    }
+
+    stage('Deploy Local Container') {
+      steps {
+        script {
+          def localImageTag = "${env.IMAGE_NAME}:v1.0"
+          echo "Running container locally: ${localImageTag} on port ${env.DEPLOY_PORT}..."
+          // Run the container locally from the built image.
+          sh "docker run -d --expose ${env.DEPLOY_PORT} -p ${env.DEPLOY_PORT}:3000 ${localImageTag}"
+        }
+      }
+    }
+
+    stage('Trigger Deployment Pipeline') {
+      steps {
+        script {
+          // Construct the full image tag using the hardcoded DOCKER_USER.
+          def fullImageTag = "${DOCKER_USER}/${env.IMAGE_NAME}:v1.0"
+
+          if (env.BRANCH_NAME == 'dev') {
+            echo "Triggering Deploy_to_dev job with image ${fullImageTag}..."
+            build job: 'Deploy_to_dev', parameters: [
+              string(name: 'FULL_IMAGE', value: fullImageTag)
+            ], wait: false
           } else {
-            echo "Deploying main branch on port 3000..."
-            sh "docker run -d --expose 3000 -p 3000:3000 nodemain:v1.0"
+            echo "Triggering Deploy_to_main job with image ${fullImageTag}..."
+            build job: 'Deploy_to_main', parameters: [
+              string(name: 'FULL_IMAGE', value: fullImageTag)
+            ], wait: false
           }
         }
       }
@@ -79,7 +149,7 @@ pipeline {
 
   post {
     always {
-      echo "Pipeline execution completed."
+      echo "Multibranch Pipeline execution completed."
     }
   }
 }
